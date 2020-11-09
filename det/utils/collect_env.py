@@ -1,13 +1,13 @@
 from mmcv.utils import collect_env as collect_base_env
 from mmcv.utils import get_git_hash
 
-import mmdet
+import ..__version__ as __version__
 
 
 def collect_env():
     """Collect the information of the running environments."""
     env_info = collect_base_env()
-    env_info['MMDetection'] = mmdet.__version__ + '+' + get_git_hash()[:7]
+    env_info['VehicleDetection'] = __version__ + '+' + get_git_hash()[:7]
     return env_info
 
 
