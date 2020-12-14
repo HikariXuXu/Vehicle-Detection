@@ -1,11 +1,13 @@
 import glob
 import random
 import os
+import sys
 import numpy as np
 from PIL import Image
 import torch
 import torch.nn.functional as F
 
+from utils.augmentations import horisontal_flip
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
@@ -55,7 +57,7 @@ class ImageFolder(Dataset):
 
 
 class ListDataset(Dataset):
-    def __init__(self, list_path, img_size=416, multiscale=True, normalized_labels=True):
+    def __init__(self, list_path, img_size=416, augment=True, multiscale=True, normalized_labels=False):
         with open(list_path, "r") as file:
             self.img_files = file.readlines()
 
@@ -65,6 +67,7 @@ class ListDataset(Dataset):
         ]
         self.img_size = img_size
         self.max_objects = 100
+        self.augment = augment
         self.multiscale = multiscale
         self.normalized_labels = normalized_labels
         self.min_size = self.img_size - 3 * 32
@@ -120,6 +123,11 @@ class ListDataset(Dataset):
 
             targets = torch.zeros((len(boxes), 6))
             targets[:, 1:] = boxes
+
+        # Apply augmentations
+        if self.augment:
+            if np.random.random() < 0.5:
+                img, targets = horisontal_flip(img, targets)
 
         return img_path, img, targets
 

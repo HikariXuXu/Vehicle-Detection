@@ -1,31 +1,18 @@
+from __future__ import division
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 import numpy as np
 
-from utils import build_targets
+from utils.parse_config import *
+from utils.utils import build_targets, to_cpu, non_max_suppression
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 
-def parse_model_config(path):
-    """Parses the yolo-v3 layer configuration file and returns module definitions"""
-    file = open(path, 'r')
-    lines = file.read().split('\n')
-    lines = [x for x in lines if x and not x.startswith('#')]
-    lines = [x.rstrip().lstrip() for x in lines] # get rid of fringe whitespaces
-    module_defs = []
-    for line in lines:
-        if line.startswith('['): # This marks the start of a new block
-            module_defs.append({})
-            module_defs[-1]['type'] = line[1:-1].rstrip()
-            if module_defs[-1]['type'] == 'convolutional':
-                module_defs[-1]['batch_normalize'] = 0
-        else:
-            key, value = line.split("=")
-            value = value.strip()
-            module_defs[-1][key.rstrip()] = value.strip()
-
-    return module_defs
-    
 def create_modules(module_defs):
     """
     Constructs module list of layer blocks from module configuration in module_defs
@@ -149,6 +136,8 @@ class YOLOLayer(nn.Module):
 
         # Tensors for cuda support
         FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor
+        LongTensor = torch.cuda.LongTensor if x.is_cuda else torch.LongTensor
+        ByteTensor = torch.cuda.ByteTensor if x.is_cuda else torch.ByteTensor
 
         self.img_dim = img_dim
         num_samples = x.size(0)
@@ -198,6 +187,8 @@ class YOLOLayer(nn.Module):
                 anchors=self.scaled_anchors,
                 ignore_thres=self.ignore_thres,
             )
+            obj_mask=obj_mask.bool() # convert int8 to bool
+            noobj_mask=noobj_mask.bool() #convert int8 to bool
 
             # Loss : Mask outputs to ignore non-existing objects (except with conf. loss)
             loss_x = self.mse_loss(x[obj_mask], tx[obj_mask])
@@ -223,19 +214,19 @@ class YOLOLayer(nn.Module):
             recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
 
             self.metrics = {
-                "loss": total_loss.detach().cpu().item(),
-                "x": loss_x.detach().cpu().item(),
-                "y": loss_y.detach().cpu().item(),
-                "w": loss_w.detach().cpu().item(),
-                "h": loss_h.detach().cpu().item(),
-                "conf": loss_conf.detach().cpu().item(),
-                "cls": loss_cls.detach().cpu().item(),
-                "cls_acc": cls_acc.detach().cpu().item(),
-                "recall50": recall50.detach().cpu().item(),
-                "recall75": recall75.detach().cpu().item(),
-                "precision": precision.detach().cpu().item(),
-                "conf_obj": conf_obj.detach().cpu().item(),
-                "conf_noobj": conf_noobj.detach().cpu().item(),
+                "loss": to_cpu(total_loss).item(),
+                "x": to_cpu(loss_x).item(),
+                "y": to_cpu(loss_y).item(),
+                "w": to_cpu(loss_w).item(),
+                "h": to_cpu(loss_h).item(),
+                "conf": to_cpu(loss_conf).item(),
+                "cls": to_cpu(loss_cls).item(),
+                "cls_acc": to_cpu(cls_acc).item(),
+                "recall50": to_cpu(recall50).item(),
+                "recall75": to_cpu(recall75).item(),
+                "precision": to_cpu(precision).item(),
+                "conf_obj": to_cpu(conf_obj).item(),
+                "conf_noobj": to_cpu(conf_noobj).item(),
                 "grid_size": grid_size,
             }
 
@@ -271,7 +262,7 @@ class Darknet(nn.Module):
                 loss += layer_loss
                 yolo_outputs.append(x)
             layer_outputs.append(x)
-        yolo_outputs = torch.cat(yolo_outputs, 1).detach().cpu()
+        yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
         return yolo_outputs if targets is None else (loss, yolo_outputs)
 
     def load_darknet_weights(self, weights_path):

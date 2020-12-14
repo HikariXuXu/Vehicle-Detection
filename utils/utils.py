@@ -1,7 +1,18 @@
 from __future__ import division
-import torch
+import math
+import time
 import tqdm
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+
+def to_cpu(tensor):
+    return tensor.detach().cpu()
 
 
 def load_classes(path):
@@ -9,8 +20,9 @@ def load_classes(path):
     Loads class labels at 'path'
     """
     fp = open(path, "r")
-    names = fp.read().split("\n")[:-1]
+    names = fp.read().split("\n")
     return names
+
 
 def weights_init_normal(m):
     classname = m.__class__.__name__
@@ -19,6 +31,7 @@ def weights_init_normal(m):
     elif classname.find("BatchNorm2d") != -1:
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
+
 
 def rescale_boxes(boxes, current_dim, original_shape):
     """ Rescales bounding boxes to the original shape """
@@ -35,6 +48,7 @@ def rescale_boxes(boxes, current_dim, original_shape):
     boxes[:, 2] = ((boxes[:, 2] - pad_x // 2) / unpad_w) * orig_w
     boxes[:, 3] = ((boxes[:, 3] - pad_y // 2) / unpad_h) * orig_h
     return boxes
+
 
 def xywh2xyxy(x):
     y = x.new(x.shape)
@@ -103,6 +117,7 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
 def compute_ap(recall, precision):
     """ Compute the average precision, given the recall and precision curves.
     Code originally from https://github.com/rbgirshick/py-faster-rcnn.
+
     # Arguments
         recall:    The recall curve (list).
         precision: The precision curve (list).
@@ -126,6 +141,7 @@ def compute_ap(recall, precision):
     ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
 
+
 def get_batch_statistics(outputs, targets, iou_threshold):
     """ Compute true positives, predicted scores and predicted labels per sample """
     batch_metrics = []
@@ -143,6 +159,7 @@ def get_batch_statistics(outputs, targets, iou_threshold):
 
         annotations = targets[targets[:, 0] == sample_i][:, 1:]
         target_labels = annotations[:, 0] if len(annotations) else []
+        print(annotations)
         if len(annotations):
             detected_boxes = []
             target_boxes = annotations[:, 1:]
