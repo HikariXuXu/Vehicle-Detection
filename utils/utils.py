@@ -287,7 +287,7 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
 
     # Convert to position relative to box
-    target_boxes = target[:, 2:6] * nG
+    target_boxes = target[:, 2:6] * (nG-1)
     gxy = target_boxes[:, :2]
     gwh = target_boxes[:, 2:]
     # Get anchors with best iou
